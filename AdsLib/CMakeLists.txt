@@ -37,6 +37,11 @@ set_target_properties(ads PROPERTIES
     OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug
 )
 
+# Ensure correct linking directories for Windows
+if(WIN32)
+    target_link_directories(ads PUBLIC $<TARGET_FILE_DIR:ads>)
+endif()
+
 # Ensure NOMINMAX is defined for Windows/MSVC to avoid macro conflicts
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR WIN32)
   target_compile_definitions(ads PUBLIC NOMINMAX=1)
