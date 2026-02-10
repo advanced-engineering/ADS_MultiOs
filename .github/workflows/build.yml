@@ -16,7 +16,8 @@ jobs:
           name: ubuntu-meson
           path: |
             build/
-            example/build/  build-ubuntu:
+            example/build/
+
   build-ubuntu-cmake:
     runs-on: ubuntu-latest
     steps:
@@ -30,48 +31,87 @@ jobs:
           name: ubuntu-cmake
           path: |
             build/
+
+  build-win64-cmake:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure CMake
+        run: cmake -S . -B build -G "Ninja"
+      - name: Build
+        run: cmake --build build --config Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win64-cmake
+          path: |
+            build/
+
   collect-and-release:
-    needs: [build-ubuntu-meson, build-ubuntu-cmake]
+    needs: [build-ubuntu-meson, build-ubuntu-cmake, build-win64-cmake]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: Download artifact ubuntu-meson
-      uses: actions/download-artifact@v4
-      with:
-        name: ubuntu-meson
-        path: ./build-ubuntu-meson
-    - name: Download artifact ubuntu-cmake
-      uses: actions/download-artifact@v4
-      with:
-        name: ubuntu-cmake
-        path: ./build-ubuntu-cmake
+      - uses: actions/checkout@v2
+      - name: Extract version from tag
+        id: extract_version
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+      - name: Download artifact ubuntu-meson
+        uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-meson
+          path: ./build-ubuntu-meson
+      - name: Download artifact ubuntu-cmake
+        uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-cmake
+          path: ./build-ubuntu-cmake
+      - name: Download artifact win64-cmake
+        uses: actions/download-artifact@v4
+        with:
+          name: win64-cmake
+          path: ./build-win64-cmake
 
-    - name: 'Compress files for the linux-x64 release artifact'
-      shell: bash
-      run: |
-        zip --junk-paths ./linux-x64.zip ./build-ubuntu-cmake/**/*.so ./build-ubuntu-cmake/**/*.so.* ./build-ubuntu-meson/build/adstool
+      - name: 'Compress files for the linux-x64 release artifact'
+        shell: bash
+        run: |
+          zip --junk-paths ./AdsTool_Linux-x64_v${VERSION}.zip ./build-ubuntu-cmake/**/*.so ./build-ubuntu-cmake/**/*.so.* ./build-ubuntu-meson/build/adstool || true
 
-    - name: 'Obtain the current version number from the debian changelog. We need it to create the release.'
-      shell: bash
-      run: |
-        echo "GITHUB_ADSLIB_VERSION_NUMBER=$(dpkg-parsechangelog -SVersion --file ./debian/changelog)" >> $GITHUB_ENV
-    - name: Create release
-      if: startsWith(github.ref, 'refs/tags/v')
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ env.GITHUB_ADSLIB_VERSION_NUMBER }}
-        release_name: ${{ env.GITHUB_ADSLIB_VERSION_NUMBER }}
-        generate_release_notes: true
-    - name: 'Upload release asset'
-      if: steps.create_release.outcome == 'success'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./linux-x64.zip
-        asset_name: linux-x64.zip
-        asset_content_type: application/zip
+      - name: 'Compress files for the win-x64 release artifact'
+        shell: bash
+        run: |
+          zip --junk-paths ./AdsTool_Win-x64_v${VERSION}.zip ./build-win64-cmake/**/* || true
+
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ env.VERSION }}
+          release_name: AdsTool_MultiOS_v${{ env.VERSION }}
+          generate_release_notes: true
+
+      - name: 'Upload Linux release asset'
+        if: steps.create_release.outcome == 'success'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./AdsTool_Linux-x64_v${{ env.VERSION }}.zip
+          asset_name: AdsTool_Linux-x64_v${{ env.VERSION }}.zip
+          asset_content_type: application/zip
+
+      - name: 'Upload Win64 release asset'
+        if: steps.create_release.outcome == 'success'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./AdsTool_Win-x64_v${{ env.VERSION }}.zip
+          asset_name: AdsTool_Win-x64_v${{ env.VERSION }}.zip
+          asset_content_type: application/zip
