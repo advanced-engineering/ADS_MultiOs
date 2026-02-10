@@ -30,6 +30,12 @@ add_library(ads::ads ALIAS ads)
 target_include_directories(ads PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 $<INSTALL_INTERFACE:include/ads>)
 
+
+# Ensure NOMINMAX is defined for Windows/MSVC to avoid macro conflicts
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR WIN32)
+  target_compile_definitions(ads PUBLIC NOMINMAX=1)
+endif()
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   target_link_libraries(ads PUBLIC wsock32)
 endif()
